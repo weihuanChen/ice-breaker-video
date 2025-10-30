@@ -15,12 +15,29 @@ export function TagFilter({ tags, className }: TagFilterProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  // Get currently selected tags from URL
-  const selectedTagSlugs = searchParams.get('tags')?.split(',').filter(Boolean) || []
+  // Get currently selected tags from URL (new format: /tag/slug1+slug2)
+  const getSelectedTagSlugs = (): string[] => {
+    // Check if we're on a tag route
+    if (pathname.includes('/tag/')) {
+      const match = pathname.match(/\/tag\/([^/]+)/)
+      if (match) {
+        return match[1].split('+').filter(Boolean)
+      }
+    }
+    // Fallback to old query param format (for backwards compatibility)
+    return searchParams.get('tags')?.split(',').filter(Boolean) || []
+  }
+
+  const selectedTagSlugs = getSelectedTagSlugs()
+
+  // Determine base path for navigation
+  const getBasePath = (): string => {
+    if (pathname.startsWith('/shorts')) return '/shorts'
+    if (pathname.startsWith('/long-form')) return '/long-form'
+    return ''
+  }
 
   const toggleTag = (tagSlug: string) => {
-    const newParams = new URLSearchParams(searchParams.toString())
-
     let updatedTags: string[]
     if (selectedTagSlugs.includes(tagSlug)) {
       // Remove tag
@@ -30,22 +47,47 @@ export function TagFilter({ tags, className }: TagFilterProps) {
       updatedTags = [...selectedTagSlugs, tagSlug]
     }
 
-    if (updatedTags.length > 0) {
-      newParams.set('tags', updatedTags.join(','))
-    } else {
-      newParams.delete('tags')
-    }
+    const basePath = getBasePath()
 
-    // Navigate with updated params
-    const queryString = newParams.toString()
-    router.push(queryString ? `${pathname}?${queryString}` : pathname)
+    if (updatedTags.length > 0) {
+      // Navigate to new tag URL format: /tag/slug1+slug2 or /shorts/tag/slug1+slug2
+      const tagPath = updatedTags.join('+')
+      const newPath = basePath ? `${basePath}/tag/${tagPath}` : `/tag/${tagPath}`
+
+      // Preserve other search params (like search query)
+      const otherParams = new URLSearchParams()
+      searchParams.forEach((value, key) => {
+        if (key !== 'tags') {
+          otherParams.set(key, value)
+        }
+      })
+      const queryString = otherParams.toString()
+      router.push(queryString ? `${newPath}?${queryString}` : newPath)
+    } else {
+      // No tags selected, go back to base path
+      const otherParams = new URLSearchParams()
+      searchParams.forEach((value, key) => {
+        if (key !== 'tags') {
+          otherParams.set(key, value)
+        }
+      })
+      const queryString = otherParams.toString()
+      const returnPath = basePath || '/'
+      router.push(queryString ? `${returnPath}?${queryString}` : returnPath)
+    }
   }
 
   const clearAllTags = () => {
-    const newParams = new URLSearchParams(searchParams.toString())
-    newParams.delete('tags')
-    const queryString = newParams.toString()
-    router.push(queryString ? `${pathname}?${queryString}` : pathname)
+    const basePath = getBasePath()
+    const otherParams = new URLSearchParams()
+    searchParams.forEach((value, key) => {
+      if (key !== 'tags') {
+        otherParams.set(key, value)
+      }
+    })
+    const queryString = otherParams.toString()
+    const returnPath = basePath || '/'
+    router.push(queryString ? `${returnPath}?${queryString}` : returnPath)
   }
 
   if (tags.length === 0) {

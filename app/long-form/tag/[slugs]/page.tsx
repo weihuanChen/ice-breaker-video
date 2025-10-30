@@ -4,15 +4,11 @@ import { db, VideosTable } from '@/lib/drizzle'
 import { VideoCard, VideoCardSkeleton } from '@/components/video-card'
 import { TagFilter } from '@/components/tag-filter'
 import { getAllTags, getVideosByTags } from '@/lib/queries/tags'
-import { redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
+import type { Metadata } from 'next'
 
 // ISR: Revalidate every 4 hours
 export const revalidate = 14400
-
-export const metadata = {
-  title: 'Long Form Videos - Icebreak Games',
-  description: 'In-depth icebreaker game tutorials and activities for your team or classroom.',
-}
 
 async function getLongVideos(tagSlugs?: string[]) {
   // If tags are selected, use tag filtering with category
@@ -37,7 +33,7 @@ async function VideoGrid({ tagSlugs }: { tagSlugs?: string[] }) {
         <div className="text-center">
           <h3 className="text-2xl font-semibold mb-2">No long videos found</h3>
           <p className="text-muted-foreground">
-            Check back soon for in-depth icebreaker game tutorials!
+            No long videos found with the selected tags. Try different tags.
           </p>
         </div>
       </div>
@@ -63,27 +59,62 @@ function VideoGridSkeleton() {
   )
 }
 
-export default async function LongFormPage({
-  searchParams,
+// Generate metadata for SEO
+export async function generateMetadata({
+  params,
 }: {
-  searchParams: Promise<{ tags?: string }>
-}) {
-  const params = await searchParams
-  const tagSlugs = params.tags?.split(',').filter(Boolean)
+  params: Promise<{ slugs: string }>
+}): Promise<Metadata> {
+  const { slugs } = await params
+  const tagSlugs = slugs.split('+').filter(Boolean)
 
-  // Redirect old URL format (?tags=...) to new format (/long-form/tag/...)
-  if (tagSlugs && tagSlugs.length > 0) {
-    redirect(`/long-form/tag/${tagSlugs.join('+')}`)
+  // Get tag names for better metadata
+  const allTags = await getAllTags()
+  const tagNames = tagSlugs
+    .map(slug => allTags.find(t => t.slug === slug)?.name)
+    .filter(Boolean)
+
+  const title = tagNames.length > 0
+    ? `${tagNames.join(' + ')} - Long Form Icebreaker Videos`
+    : 'Long Form Icebreaker Videos'
+
+  const description = tagNames.length > 0
+    ? `In-depth icebreaker tutorials for ${tagNames.join(', ')}. Comprehensive guides for your team or classroom.`
+    : 'In-depth tutorials and comprehensive guides for icebreaker games'
+
+  return {
+    title,
+    description,
+  }
+}
+
+export default async function LongFormTagPage({
+  params,
+}: {
+  params: Promise<{ slugs: string }>
+}) {
+  const { slugs } = await params
+
+  // Parse tag slugs from URL (separated by +)
+  const tagSlugs = slugs.split('+').filter(Boolean)
+
+  if (tagSlugs.length === 0) {
+    notFound()
   }
 
   // Get all tags for the filter
   const allTags = await getAllTags()
 
+  // Get tag names for display
+  const tagNames = tagSlugs
+    .map(slug => allTags.find(t => t.slug === slug)?.name)
+    .filter(Boolean)
+
   return (
     <main className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-3 text-3xl font-bold tracking-tight md:text-4xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-          Long Form Videos
+          {tagNames.length > 0 ? `${tagNames.join(' + ')} - ` : ''}Long Form Videos
         </h1>
         <p className="text-lg text-muted-foreground">
           In-depth tutorials and comprehensive guides for icebreaker games

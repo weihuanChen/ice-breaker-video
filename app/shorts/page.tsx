@@ -4,6 +4,7 @@ import { db, VideosTable } from '@/lib/drizzle'
 import { VideoCard, VideoCardSkeleton } from '@/components/video-card'
 import { TagFilter } from '@/components/tag-filter'
 import { getAllTags, getVideosByTags } from '@/lib/queries/tags'
+import { redirect } from 'next/navigation'
 
 // ISR: Revalidate every 4 hours
 export const revalidate = 14400
@@ -69,6 +70,11 @@ export default async function ShortsPage({
 }) {
   const params = await searchParams
   const tagSlugs = params.tags?.split(',').filter(Boolean)
+
+  // Redirect old URL format (?tags=...) to new format (/shorts/tag/...)
+  if (tagSlugs && tagSlugs.length > 0) {
+    redirect(`/shorts/tag/${tagSlugs.join('+')}`)
+  }
 
   // Get all tags for the filter
   const allTags = await getAllTags()

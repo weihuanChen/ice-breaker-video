@@ -5,14 +5,12 @@ import { VideoCard, VideoCardSkeleton } from '@/components/video-card'
 import { TagFilter } from '@/components/tag-filter'
 import { getAllTags, getVideosByTags } from '@/lib/queries/tags'
 import { LoadMoreVideos } from '@/components/load-more-videos'
-import { redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
+import type { Metadata } from 'next'
 
 const VIDEOS_PER_PAGE = 20
 
 // ISR: Static page regeneration time
-// Development: 60 seconds (1 minute) - fast iteration
-// Production: 14400 seconds (4 hours) - optimized for weekly updates
-// Adjust to 86400 (24 hours) after launch for even better performance
 export const revalidate = 14400
 
 async function getVideos(searchQuery?: string, tagSlugs?: string[], limit?: number, offset?: number) {
@@ -122,7 +120,7 @@ async function VideoGrid({
           <p className="text-muted-foreground">
             {searchQuery
               ? `No results for "${searchQuery}". Try a different search term.`
-              : 'Check back soon for new icebreaker games!'}
+              : 'No videos found with the selected tags. Try different tags.'}
           </p>
         </div>
       </div>
@@ -149,37 +147,72 @@ function VideoGridSkeleton() {
   )
 }
 
-export default async function Home({
+// Generate metadata for SEO
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slugs: string }>
+}): Promise<Metadata> {
+  const { slugs } = await params
+  const tagSlugs = slugs.split('+').filter(Boolean)
+
+  // Get tag names for better metadata
+  const allTags = await getAllTags()
+  const tagNames = tagSlugs
+    .map(slug => allTags.find(t => t.slug === slug)?.name)
+    .filter(Boolean)
+
+  const title = tagNames.length > 0
+    ? `${tagNames.join(' + ')} - Icebreaker Games`
+    : 'Tagged Icebreaker Games'
+
+  const description = tagNames.length > 0
+    ? `Discover icebreaker games for ${tagNames.join(', ')}. Fun and engaging activities to energize your team, classroom, or event.`
+    : 'Browse icebreaker games by tag'
+
+  return {
+    title,
+    description,
+  }
+}
+
+export default async function TagPage({
+  params,
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; tags?: string }>
+  params: Promise<{ slugs: string }>
+  searchParams: Promise<{ search?: string }>
 }) {
-  const params = await searchParams
-  const searchQuery = params.search
-  const tagSlugs = params.tags?.split(',').filter(Boolean)
+  const { slugs } = await params
+  const { search } = await searchParams
 
-  // Redirect old URL format (?tags=...) to new format (/tag/...)
-  if (tagSlugs && tagSlugs.length > 0) {
-    const newPath = `/tag/${tagSlugs.join('+')}`
-    const searchQueryString = searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''
-    redirect(newPath + searchQueryString)
+  // Parse tag slugs from URL (separated by +)
+  const tagSlugs = slugs.split('+').filter(Boolean)
+
+  if (tagSlugs.length === 0) {
+    notFound()
   }
 
   // Get all tags for the filter
   const allTags = await getAllTags()
 
+  // Get tag names for display
+  const tagNames = tagSlugs
+    .map(slug => allTags.find(t => t.slug === slug)?.name)
+    .filter(Boolean)
+
   return (
     <main className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-3 text-3xl font-bold tracking-tight md:text-4xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-          Discover Icebreaker Games
+          {tagNames.length > 0 ? tagNames.join(' + ') : 'Tagged'} Icebreaker Games
         </h1>
         <p className="text-lg text-muted-foreground">
           Fun and engaging activities to energize your team, classroom, or event
         </p>
-        {searchQuery && (
+        {search && (
           <p className="mt-2 text-sm text-muted-foreground">
-            Search results for: <span className="font-semibold">{searchQuery}</span>
+            Search results for: <span className="font-semibold">{search}</span>
           </p>
         )}
       </div>
@@ -192,7 +225,7 @@ export default async function Home({
       )}
 
       <Suspense fallback={<VideoGridSkeleton />}>
-        <VideoGrid searchQuery={searchQuery} tagSlugs={tagSlugs} />
+        <VideoGrid searchQuery={search} tagSlugs={tagSlugs} />
       </Suspense>
     </main>
   )
