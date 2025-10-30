@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Allow favicons to be crawled
+Allow: /favicon.ico
+Allow: /ice.svg
+Allow: /apple-touch-icon.png
