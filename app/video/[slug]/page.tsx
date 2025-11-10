@@ -22,13 +22,13 @@ async function getVideo(slug: string): Promise<Video | null> {
   return videos[0] || null
 }
 
-async function getRelatedVideos(currentVideoId: number, category: string): Promise<Video[]> {
+async function getRelatedVideos(currentVideoId: number, limit: number = 4): Promise<Video[]> {
   return await db
     .select()
     .from(VideosTable)
     .where(ne(VideosTable.id, currentVideoId))
     .orderBy(desc(VideosTable.createdAt))
-    .limit(4)
+    .limit(limit)
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
@@ -55,8 +55,11 @@ export default async function VideoPage({ params }: { params: Promise<{ slug: st
     notFound()
   }
 
-  const relatedVideos = await getRelatedVideos(video.id, video.category || 'long')
-  const videoTags = await getTagsByVideoId(video.id)
+  // Fetch related videos and tags in parallel for better performance
+  const [relatedVideos, videoTags] = await Promise.all([
+    getRelatedVideos(video.id, 4),
+    getTagsByVideoId(video.id),
+  ])
 
   return (
     <main className="container mx-auto px-4 py-8">

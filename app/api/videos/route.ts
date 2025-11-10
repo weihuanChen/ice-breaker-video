@@ -1,35 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { desc, ilike, or } from 'drizzle-orm'
-import { db, VideosTable } from '@/lib/drizzle'
+import { desc, ilike, or, eq, inArray, ne, and, sql } from 'drizzle-orm'
+import { db, VideosTable, TagsTable, VideoTagsTable } from '@/lib/drizzle'
 import { getVideosByTags } from '@/lib/queries/tags'
 
 const VIDEOS_PER_PAGE = 20
 
 async function getVideos(searchQuery?: string, tagSlugs?: string[], limit?: number, offset?: number) {
-  // If tags are selected, use tag filtering
+  // If tags are selected, use tag filtering with optimized queries
   if (tagSlugs && tagSlugs.length > 0) {
-    const taggedVideos = await getVideosByTags(tagSlugs)
+    // Get tag IDs
+    const tags = await db
+      .select({ tagId: TagsTable.tagId })
+      .from(TagsTable)
+      .where(inArray(TagsTable.slug, tagSlugs))
 
-    // If there's also a search query, filter the tagged videos
+    if (tags.length === 0) {
+      return []
+    }
+
+    const tagIds = tags.map((tag) => tag.tagId)
+
+    // Build main query with tag join
+    let query = db
+      .selectDistinct({ video: VideosTable })
+      .from(VideosTable)
+      .innerJoin(VideoTagsTable, eq(VideosTable.id, VideoTagsTable.videoId))
+      .where(inArray(VideoTagsTable.tagId, tagIds))
+
+    // Add search filter if provided
     if (searchQuery) {
-      const searchLower = searchQuery.toLowerCase()
-      const filtered = taggedVideos.filter(
-        (video) =>
-          video.title.toLowerCase().includes(searchLower) ||
-          video.description?.toLowerCase().includes(searchLower)
-      )
-      // Apply pagination to filtered results
-      if (limit !== undefined && offset !== undefined) {
-        return filtered.slice(offset, offset + limit)
-      }
-      return filtered
+      query = query.where(
+        or(
+          ilike(VideosTable.title, `%${searchQuery}%`),
+          ilike(VideosTable.description, `%${searchQuery}%`)
+        )
+      ) as any
     }
 
-    // Apply pagination to tagged videos
-    if (limit !== undefined && offset !== undefined) {
-      return taggedVideos.slice(offset, offset + limit)
+    query = query.orderBy(desc(VideosTable.createdAt)) as any
+
+    // Apply pagination
+    if (limit !== undefined) {
+      query = query.limit(limit) as any
     }
-    return taggedVideos
+    if (offset !== undefined) {
+      query = query.offset(offset) as any
+    }
+
+    const results = await query
+    return results.map((row: any) => row.video)
   }
 
   // No tags selected, use regular search/all videos
@@ -58,26 +77,44 @@ async function getVideos(searchQuery?: string, tagSlugs?: string[], limit?: numb
 }
 
 async function getTotalVideosCount(searchQuery?: string, tagSlugs?: string[]) {
-  // If tags are selected, count filtered videos
+  // If tags are selected, count using optimized query
   if (tagSlugs && tagSlugs.length > 0) {
-    const taggedVideos = await getVideosByTags(tagSlugs)
+    // Get tag IDs
+    const tags = await db
+      .select({ tagId: TagsTable.tagId })
+      .from(TagsTable)
+      .where(inArray(TagsTable.slug, tagSlugs))
 
-    if (searchQuery) {
-      const searchLower = searchQuery.toLowerCase()
-      return taggedVideos.filter(
-        (video) =>
-          video.title.toLowerCase().includes(searchLower) ||
-          video.description?.toLowerCase().includes(searchLower)
-      ).length
+    if (tags.length === 0) {
+      return 0
     }
 
-    return taggedVideos.length
+    const tagIds = tags.map((tag) => tag.tagId)
+
+    // Build count query with tag join
+    let query = db
+      .selectDistinct({ id: VideosTable.id })
+      .from(VideosTable)
+      .innerJoin(VideoTagsTable, eq(VideosTable.id, VideoTagsTable.videoId))
+      .where(inArray(VideoTagsTable.tagId, tagIds))
+
+    if (searchQuery) {
+      query = query.where(
+        or(
+          ilike(VideosTable.title, `%${searchQuery}%`),
+          ilike(VideosTable.description, `%${searchQuery}%`)
+        )
+      ) as any
+    }
+
+    const result = await query
+    return result.length
   }
 
-  // No tags, count all or search results
+  // No tags, count by search or all
   if (searchQuery) {
-    const results = await db
-      .select()
+    const result = await db
+      .select({ id: VideosTable.id })
       .from(VideosTable)
       .where(
         or(
@@ -85,11 +122,14 @@ async function getTotalVideosCount(searchQuery?: string, tagSlugs?: string[]) {
           ilike(VideosTable.description, `%${searchQuery}%`)
         )
       )
-    return results.length
+    return result.length
   }
 
-  const allVideos = await db.select().from(VideosTable)
-  return allVideos.length
+  const countResult = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(VideosTable)
+  
+  return countResult[0]?.count || 0
 }
 
 // Mark as dynamic since we need to read searchParams

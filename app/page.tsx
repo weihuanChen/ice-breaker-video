@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
-import { desc, ilike, or } from 'drizzle-orm'
-import { db, VideosTable } from '@/lib/drizzle'
+import { desc, ilike, or, and, eq, inArray, sql } from 'drizzle-orm'
+import { db, VideosTable, TagsTable, VideoTagsTable } from '@/lib/drizzle'
 import { VideoCard, VideoCardSkeleton } from '@/components/video-card'
 import { TagFilter } from '@/components/tag-filter'
 import { getAllTags, getVideosByTags } from '@/lib/queries/tags'
@@ -68,26 +68,44 @@ async function getVideos(searchQuery?: string, tagSlugs?: string[], limit?: numb
 }
 
 async function getTotalVideosCount(searchQuery?: string, tagSlugs?: string[]) {
-  // If tags are selected, count filtered videos
+  // If tags are selected, use optimized tag-based counting
   if (tagSlugs && tagSlugs.length > 0) {
-    const taggedVideos = await getVideosByTags(tagSlugs)
+    // Get tag IDs
+    const tags = await db
+      .select({ tagId: TagsTable.tagId })
+      .from(TagsTable)
+      .where(inArray(TagsTable.slug, tagSlugs))
 
-    if (searchQuery) {
-      const searchLower = searchQuery.toLowerCase()
-      return taggedVideos.filter(
-        (video) =>
-          video.title.toLowerCase().includes(searchLower) ||
-          video.description?.toLowerCase().includes(searchLower)
-      ).length
+    if (tags.length === 0) {
+      return 0
     }
 
-    return taggedVideos.length
+    const tagIds = tags.map((tag) => tag.tagId)
+
+    // Build the count query with tag filter
+    let query = db
+      .selectDistinct({ id: VideosTable.id })
+      .from(VideosTable)
+      .innerJoin(VideoTagsTable, eq(VideosTable.id, VideoTagsTable.videoId))
+      .where(inArray(VideoTagsTable.tagId, tagIds))
+
+    if (searchQuery) {
+      query = query.where(
+        or(
+          ilike(VideosTable.title, `%${searchQuery}%`),
+          ilike(VideosTable.description, `%${searchQuery}%`)
+        )
+      ) as any
+    }
+
+    const result = await query
+    return result.length
   }
 
-  // No tags, count all or search results
+  // No tags, count by search or all
   if (searchQuery) {
-    const results = await db
-      .select()
+    const result = await db
+      .select({ id: VideosTable.id })
       .from(VideosTable)
       .where(
         or(
@@ -95,11 +113,14 @@ async function getTotalVideosCount(searchQuery?: string, tagSlugs?: string[]) {
           ilike(VideosTable.description, `%${searchQuery}%`)
         )
       )
-    return results.length
+    return result.length
   }
 
-  const allVideos = await db.select().from(VideosTable)
-  return allVideos.length
+  const countResult = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(VideosTable)
+  
+  return countResult[0]?.count || 0
 }
 
 async function VideoGrid({

@@ -3,10 +3,22 @@ import { db, TagsTable, VideoTagsTable, VideosTable, type Tag, type Video } from
 
 export type TagWithCount = Tag & { videoCount: number }
 
+// Cache for getAllTags - revalidate every 1 hour (3600 seconds)
+let tagsCache: TagWithCount[] | null = null
+let tagsCacheTime = 0
+const TAGS_CACHE_TTL = 3600 // 1 hour in seconds
+
 /**
  * Get all tags with their video counts
  */
 export async function getAllTags(): Promise<TagWithCount[]> {
+  const now = Math.floor(Date.now() / 1000)
+  
+  // Return cached result if still valid
+  if (tagsCache && tagsCacheTime && now - tagsCacheTime < TAGS_CACHE_TTL) {
+    return tagsCache
+  }
+
   const result = await db
     .select({
       tagId: TagsTable.tagId,
@@ -19,7 +31,19 @@ export async function getAllTags(): Promise<TagWithCount[]> {
     .groupBy(TagsTable.tagId)
     .orderBy(desc(sql`count(${VideoTagsTable.videoId})`))
 
+  // Update cache
+  tagsCache = result
+  tagsCacheTime = now
+
   return result
+}
+
+/**
+ * Invalidate tags cache (call after tag operations)
+ */
+export function invalidateTagsCache(): void {
+  tagsCache = null
+  tagsCacheTime = 0
 }
 
 /**
