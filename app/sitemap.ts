@@ -1,32 +1,31 @@
 import { MetadataRoute } from 'next'
 import { getAllTags } from '@/lib/queries/tags'
-import { db, VideosTable } from '@/lib/drizzle'
+import { generateVideoSitemapEntries } from '@/lib/queries/videos'
+
+const BASE_URL = 'https://icebreakergames.video'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://icebreakergames.video'
-
-  // Get all tags and videos
-  const [tags, videos] = await Promise.all([
+  const [tags, videoEntries] = await Promise.all([
     getAllTags(),
-    db.select().from(VideosTable)
+    generateVideoSitemapEntries(BASE_URL)
   ])
 
   const sitemap: MetadataRoute.Sitemap = [
     // Static pages
     {
-      url: baseUrl,
+      url: BASE_URL,
       lastModified: new Date(),
       changeFrequency: 'daily',
       priority: 1,
     },
     {
-      url: `${baseUrl}/shorts`,
+      url: `${BASE_URL}/shorts`,
       lastModified: new Date(),
       changeFrequency: 'daily',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/long-form`,
+      url: `${BASE_URL}/long-form`,
       lastModified: new Date(),
       changeFrequency: 'daily',
       priority: 0.9,
@@ -34,19 +33,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   // Add individual video pages
-  videos.forEach((video) => {
-    sitemap.push({
-      url: `${baseUrl}/video/${video.slug}`,
-      lastModified: video.updatedAt || video.createdAt,
-      changeFrequency: 'weekly',
-      priority: 0.7,
-    })
-  })
+  sitemap.push(...videoEntries)
 
   // Add tag pages (main)
   tags.forEach((tag) => {
     sitemap.push({
-      url: `${baseUrl}/tag/${tag.slug}`,
+      url: `${BASE_URL}/tag/${tag.slug}`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,
@@ -56,7 +48,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Add tag pages (shorts)
   tags.forEach((tag) => {
     sitemap.push({
-      url: `${baseUrl}/shorts/tag/${tag.slug}`,
+      url: `${BASE_URL}/shorts/tag/${tag.slug}`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.7,
@@ -66,7 +58,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Add tag pages (long-form)
   tags.forEach((tag) => {
     sitemap.push({
-      url: `${baseUrl}/long-form/tag/${tag.slug}`,
+      url: `${BASE_URL}/long-form/tag/${tag.slug}`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.7,

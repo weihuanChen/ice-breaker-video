@@ -9,7 +9,15 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        default: ["var(--font-inter)"],
+        default: [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI"',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          'sans-serif',
+        ],
       },
       colors: {
         border: "hsl(var(--border))",

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, Video } from 'lucide-react'
+import { Search, Video, HelpCircle } from 'lucide-react'
 import { ThemeToggle } from './theme-toggle'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
@@ -22,6 +22,7 @@ export function Header() {
     { href: '/', label: 'All Videos', icon: Video },
     { href: '/long-form', label: 'Long Videos', icon: Video },
     { href: '/shorts', label: 'Short Videos', icon: Video },
+    { href: '/faq', label: 'FAQ', icon: HelpCircle },
   ]
 
   return (
