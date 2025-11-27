@@ -51,6 +51,30 @@ export function Footer() {
                   Short Videos
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/support"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  Support &amp; Feedback
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/user-agreement"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  User Service Agreement
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/privacy"
+                  className="text-muted-foreground transition-colors hover:text-primary"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
             </ul>
           </div>
 

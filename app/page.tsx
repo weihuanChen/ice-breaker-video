@@ -215,6 +215,15 @@ export default async function Home({
       <Suspense fallback={<VideoGridSkeleton />}>
         <VideoGrid searchQuery={searchQuery} tagSlugs={tagSlugs} />
       </Suspense>
+
+      <div className="mt-10 flex justify-center">
+        <a
+          href="/user-agreement"
+          className="text-sm text-muted-foreground hover:text-primary transition-colors"
+        >
+          User Service Agreement
+        </a>
+      </div>
     </main>
   )
 }
